@@ -5,7 +5,7 @@ typedef long off_t; // TODO: Find proper header
 
 namespace function_matcher {
     bool instruction_t::operator<(const instruction_t &other) const {
-        return op < other.op && payload < other.payload;
+        return op < other.op || (op == other.op && payload < other.payload);
     }
 
     void matcher_t::print(const std::string &name) const {

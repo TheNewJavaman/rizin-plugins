@@ -27,17 +27,17 @@ namespace function_matcher {
         matcher_t matcher;
         if (end > start) {
             rz_core_seek(core, start, true);
-            auto num_bytes = static_cast<int32_t>(end - start);
+            auto num_bytes = end - start;
             auto original_offset = core->offset;
             rz_core_block_size(core, num_bytes);
-            rz_io_read_at(core->io, core->offset, core->block, num_bytes);
-            byte_t *buffer = core->block;
-            for (int32_t i = 0; i < num_bytes;) {
-                RzAsmOp op;
-                i += rz_asm_disassemble(core->rasm, &op, buffer + i, num_bytes - i);
+            rz_io_read_at(core->io, core->offset, core->block, static_cast<int32_t>(num_bytes));
+            uint8_t *buffer = core->block;
+            RzAsmOp op;
+            for (size_t i = 0; i < num_bytes; i += op.buf.len) {
+                rz_asm_disassemble(core->rasm, &op, buffer + i, static_cast<int32_t>(num_bytes - i));
                 instruction_t instruction = {
-                        .op = buffer_t(op.buf.buf, op.buf.buf + op.size - op.payload),
-                        .payload = buffer_t(op.buf.buf + op.size - op.payload, op.buf.buf + op.size)
+                        .op = buffer_t(op.buf.buf, op.buf.buf + op.buf.len - op.payload),
+                        .payload = buffer_t(op.buf.buf + op.buf.len - op.payload, op.buf.buf + op.buf.len)
                 };
                 matcher.instructions.push_back(instruction);
                 matcher.instruction_counts[instruction]++;

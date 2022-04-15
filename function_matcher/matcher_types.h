@@ -5,9 +5,7 @@
 #include <map>
 
 namespace function_matcher {
-    typedef unsigned char byte_t;
-
-    typedef std::vector<byte_t> buffer_t;
+    typedef std::vector<int8_t> buffer_t;
 
     struct instruction_t {
     public:
