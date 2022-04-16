@@ -20,7 +20,7 @@ namespace function_matcher {
 
     const RzCmdDescArg fnm_scan_args[] = {
             {
-                    .name = "matcher_name",
+                    .name = "matcher",
                     .type = RZ_CMD_ARG_TYPE_STRING
             },
             nullptr
@@ -33,18 +33,18 @@ namespace function_matcher {
 
     const RzCmdDescArg fnm_add_args[] = {
             {
-                    .name = "function_name",
-                    .type = RZ_CMD_ARG_TYPE_FCN
+                    .name = "matcher",
+                    .type = RZ_CMD_ARG_TYPE_STRING
             },
             {
-                    .name = "matcher_name",
-                    .type = RZ_CMD_ARG_TYPE_STRING
+                    .name = "function",
+                    .type = RZ_CMD_ARG_TYPE_FCN
             },
             nullptr
     };
 
     const RzCmdDescHelp fnm_add_help = {
-            .summary = "Adds the specified function's instructions as a new matcher",
+            .summary = "Creates a new matcher from the specified function",
             .args = fnm_add_args
     };
 
@@ -55,7 +55,7 @@ namespace function_matcher {
 
     const RzCmdDescArg fnm_remove_args[] = {
             {
-                    .name = "matcher_name",
+                    .name = "matcher",
                     .type = RZ_CMD_ARG_TYPE_STRING
             },
             nullptr

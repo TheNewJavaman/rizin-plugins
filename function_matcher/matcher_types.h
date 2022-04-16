@@ -9,14 +9,16 @@ namespace function_matcher {
 
     struct instruction_t {
     public:
-        buffer_t op;
-        buffer_t payload;
+        size_t op_len;
+        buffer_t buffer;
+        buffer_t mask;
 
         bool operator<(const instruction_t& other) const;
     };
 
     struct matcher_t {
     public:
+        size_t bytes;
         std::map<instruction_t, uint32_t> instruction_counts;
         std::vector<instruction_t> instructions;
 

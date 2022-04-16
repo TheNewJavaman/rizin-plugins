@@ -17,9 +17,10 @@ namespace function_matcher {
     }
 
     RzCmdStatus fnm_add_handler(RzCore *core, int argc, const char **argv) {
-        auto func = rz_analysis_get_function_byname(core->analysis, argv[1]);
+        auto original_offset = core->offset;
+        auto func = rz_analysis_get_function_byname(core->analysis, argv[2]);
         if (func == nullptr) {
-            eprintf("fnm+: Couldn't find function with name %s\n", argv[1]);
+            eprintf("fnm+: Couldn't find function with name %s\n", argv[2]);
             return RZ_CMD_STATUS_INVALID;
         }
         auto start = func->addr;
@@ -28,24 +29,26 @@ namespace function_matcher {
         if (end > start) {
             rz_core_seek(core, start, true);
             auto num_bytes = end - start;
-            auto original_offset = core->offset;
+            matcher.bytes = num_bytes;
             rz_core_block_size(core, num_bytes);
             rz_io_read_at(core->io, core->offset, core->block, static_cast<int32_t>(num_bytes));
-            uint8_t *buffer = core->block;
-            RzAsmOp op;
-            for (size_t i = 0; i < num_bytes; i += op.buf.len) {
-                rz_asm_disassemble(core->rasm, &op, buffer + i, static_cast<int32_t>(num_bytes - i));
+            for (size_t i = 0, len = 0; i < num_bytes; i += len) {
+                RzAnalysisOp op;
+                len = core->analysis->cur->op(core->analysis, &op, start + i, core->block + i,
+                                              static_cast<int32_t>(num_bytes - i), RZ_ANALYSIS_OP_MASK_BASIC);
+                auto mask = rz_analysis_mask(core->analysis, len, core->block + i, start + i);
                 instruction_t instruction = {
-                        .op = buffer_t(op.buf.buf, op.buf.buf + op.buf.len - op.payload),
-                        .payload = buffer_t(op.buf.buf + op.buf.len - op.payload, op.buf.buf + op.buf.len)
+                        .op_len = len,
+                        .buffer = buffer_t(core->block + i, core->block + i + len),
+                        .mask = buffer_t(mask, mask + len)
                 };
                 matcher.instructions.push_back(instruction);
                 matcher.instruction_counts[instruction]++;
             }
-            rz_core_seek(core, original_offset, true);
         }
-        matchers.insert({argv[2], matcher});
-        matcher.print(argv[2]);
+        matchers.insert({argv[1], matcher});
+        matcher.print(argv[1]);
+        rz_core_seek(core, original_offset, true);
         return RZ_CMD_STATUS_OK;
     }
 
