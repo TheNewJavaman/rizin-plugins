@@ -3,22 +3,27 @@
 typedef long off_t; // TODO: Find proper header
 #include <rz_core.h>
 
-namespace function_matcher {
+namespace fnm {
     const RzCmdDescHelp fnm_group_help = {
             .summary = "Finds instructions similar to specified matchers",
             .options = "[/+-?]"
     };
 
     const RzCmdDescArg fnm_args[] = {
+            {
+                    .name = "matcher",
+                    .optional = true,
+                    .type = RZ_CMD_ARG_TYPE_STRING
+            },
             nullptr
     };
 
     const RzCmdDescHelp fnm_help = {
-            .summary = "Lists all matchers",
+            .summary = "Lists one or all matchers",
             .args = fnm_args
     };
 
-    const RzCmdDescArg fnm_scan_args[] = {
+    const RzCmdDescArg fnm_scan_all_args[] = {
             {
                     .name = "matcher",
                     .type = RZ_CMD_ARG_TYPE_STRING
@@ -26,9 +31,22 @@ namespace function_matcher {
             nullptr
     };
 
-    const RzCmdDescHelp fnm_scan_help = {
-            .summary = "Scans for instructions similar to the specified matcher",
-            .args = fnm_scan_args
+    const RzCmdDescHelp fnm_scan_all_help = {
+            .summary = "Scans everywhere for instructions similar to the specified matcher",
+            .args = fnm_scan_all_args
+    };
+
+    const RzCmdDescArg fnm_scan_this_args[] = {
+            {
+                    .name = "matcher",
+                    .type = RZ_CMD_ARG_TYPE_STRING
+            },
+            nullptr
+    };
+
+    const RzCmdDescHelp fnm_scan_this_help = {
+            .summary = "Scans here for instructions similar to the specified matcher",
+            .args = fnm_scan_this_args
     };
 
     const RzCmdDescArg fnm_add_args[] = {
