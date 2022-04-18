@@ -9,7 +9,7 @@ namespace fnm {
 
     struct instruction_t {
         size_t addr;
-        int32_t bytes;
+        uint32_t bytes;
         buffer_t buffer;
         buffer_t mask;
 
@@ -22,7 +22,7 @@ namespace fnm {
     typedef std::map<instruction_t, uint32_t> instruction_count_t;
 
     struct matcher_t {
-        int32_t bytes;
+        uint32_t bytes;
         instruction_count_t instruction_counts;
         std::vector<instruction_t> instructions;
 
@@ -32,10 +32,10 @@ namespace fnm {
 
     struct chain_common_t {
         size_t addr;
-        int32_t bytes;
+        uint32_t bytes;
         size_t start_orig;
         size_t start_this;
-        int32_t len;
+        uint32_t len;
 
     public:
         bool operator==(const chain_common_t &other) const;
@@ -45,7 +45,7 @@ namespace fnm {
 
     struct chain_missing_t {
         size_t start_orig;
-        int32_t len;
+        uint32_t len;
 
     public:
         void print(size_t i) const;
@@ -53,9 +53,9 @@ namespace fnm {
 
     struct chain_excess_t {
         size_t addr;
-        int32_t bytes;
+        uint32_t bytes;
         size_t start_this;
-        int32_t len;
+        uint32_t len;
 
     public:
         void print(size_t i) const;
@@ -63,8 +63,8 @@ namespace fnm {
 
     struct match_t {
         size_t addr;
-        int32_t bytes;
-        int32_t len;
+        uint32_t bytes;
+        uint32_t len;
         float byte_coverage;
         float instruction_coverage;
         std::vector<chain_common_t> common_chains;

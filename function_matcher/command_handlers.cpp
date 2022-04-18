@@ -8,20 +8,18 @@ namespace fnm {
 
     std::map<std::string, matcher_t> matchers;
 
-    matcher_t create_matcher(RzCore *core, const buffer_t &buffer, size_t base, size_t start, int32_t bytes) {
-        matcher_t matcher = {
-                .bytes = 0
-        };
-        for (int32_t i = 0, op_len; i < bytes; i += op_len) {
-            RzAnalysisOp op;
-            op_len = core->analysis->cur->op(core->analysis, &op, start + i, buffer.data() + i,
-                                             bytes - i, RZ_ANALYSIS_OP_MASK_BASIC);
+    void extend_matcher(RzCore *core, matcher_t &matcher, const buffer_t &buffer, size_t addr, uint32_t bytes) {
+        RzAnalysisOp op;
+        uint32_t op_len;
+        for (uint32_t i = 0; i < bytes; i += op_len) {
+            op_len = core->analysis->cur->op(core->analysis, &op, i, buffer.data() + i,
+                                             static_cast<int32_t>(bytes - i), RZ_ANALYSIS_OP_MASK_BASIC);
             if (i + op_len > bytes) {
                 break;
             }
-            auto mask = rz_analysis_mask(core->analysis, op_len, buffer.data() + i, start + i);
+            auto mask = rz_analysis_mask(core->analysis, op_len, buffer.data() + i, i);
             instruction_t instruction = {
-                    .addr = base + start + i,
+                    .addr = addr + i,
                     .bytes = op_len,
                     .buffer = buffer_t(buffer.data() + i, buffer.data() + i + op_len),
                     .mask = buffer_t(mask, mask + op_len)
@@ -30,77 +28,6 @@ namespace fnm {
             matcher.instructions.push_back(instruction);
             matcher.instruction_counts[instruction]++;
         }
-        return matcher;
-    }
-
-    /*
-    match_t create_match(const matcher_t &matcher1, const matcher_t &matcher2, std::vector<chain_t>) {
-        match_t match;
-        std::vector<chain_t> active_chains;
-        auto instruction_count = std::min(matcher1.instructions.size(), matcher2.instructions.size());
-        for (size_t i = 0; i < instruction_count; i++) {
-            auto &instruction1 = matcher1.instructions.at(i);
-            auto &instruction2 = matcher2.instructions.at(i);
-            if (instruction1 == instruction2) {
-                match.common_instructions_count++;
-
-                for (auto &active_chain: active_chains) {
-                    active_chain.instruction_end = i;
-                }
-            }
-        }
-        for (auto &chain: active_chains) {
-            chain.does_overflow = true;
-            chain.instruction_end = instruction_count - 1;
-        }
-        return match;
-    }
-    */
-
-    RzCmdStatus fnm_handler(RzCore *core, int argc, const char **argv) {
-        if (argc == 1) {
-            for (const auto &[name, matcher]: matchers) {
-                matcher.print(name);
-            }
-        } else {
-            auto matcher_iter = matchers.find(argv[1]);
-            if (matcher_iter == matchers.end()) {
-                eprintf("Error: Couldn't find matcher with name %s\n", argv[1]);
-                return RZ_CMD_STATUS_ERROR;
-            } else {
-                matcher_iter->second.print(argv[1]);
-            }
-        }
-        return RZ_CMD_STATUS_OK;
-    }
-
-    RzCmdStatus fnm_scan_all_handler(RzCore *core, int argc, const char **argv) {
-        auto maps = rz_io_maps(core->io);
-        void **it;
-        rz_pvector_foreach(maps, it)
-        {
-            auto map = reinterpret_cast<RzIOMap *>(it);
-            auto from = map->itv.addr;
-            auto to = map->itv.addr + map->itv.size;
-            rz_cons_printf("Scanning 0x%08llx - 0x%08llx...\n", from, to);
-
-        }
-        return RZ_CMD_STATUS_OK;
-
-        /*
-        RzListIter *iter;
-        void *map;
-        rz_list_foreach(){
-
-                for (auto at = from; at < to; at += core->blocksize) {
-                    if (!rz_io_is_valid_offset(core->io, at, 0)) break;
-                    auto len = static_cast<int32_t>(std::min(static_cast<uint64_t>(core->blocksize), to - at));
-                    std::vector<uint8_t> buffer(core->blocksize);
-                    rz_io_read_at(core->io, at, buffer.data(), len);
-                }
-        }
-        rz_list_free(io_bounds);
-        */
     }
 
     bool in_chain_range(size_t i, size_t j, const chain_common_t &common_chain) {
@@ -109,25 +36,15 @@ namespace fnm {
                j - common_chain.start_orig == i - common_chain.start_this;
     }
 
-    bool exceeds_gap_range(const chain_common_t &last_chain, const chain_common_t &next_chain) {
+    bool after_gap_range(const chain_common_t &last_chain, const chain_common_t &next_chain) {
         return last_chain.start_this + last_chain.len + MAXIMUM_CHAIN_GAP < next_chain.start_this;
     }
 
-    bool in_gap_range(const chain_common_t &last_chain, const chain_common_t &next_chain) {
-        return last_chain.start_this + last_chain.len <= next_chain.start_this;
+    bool before_gap_range(const chain_common_t &last_chain, const chain_common_t &next_chain) {
+        return next_chain.start_this < last_chain.start_this + last_chain.len;
     }
 
-    RzCmdStatus fnm_scan_this_handler(RzCore *core, int argc, const char **argv) {
-        auto orig_matcher_iter = matchers.find(argv[1]);
-        if (orig_matcher_iter == matchers.end()) {
-            eprintf("Error: Couldn't find matcher with name %s\n", argv[1]);
-            return RZ_CMD_STATUS_ERROR;
-        }
-        auto orig_matcher = orig_matcher_iter->second;
-        auto len = orig_matcher.bytes;
-        buffer_t buffer(len + 32); // Pad buffer in case instruction overflows
-        rz_io_read_at_mapped(core->io, core->offset, buffer.data(), len + 32);
-        auto this_matcher = create_matcher(core, buffer, core->offset, 0, len);
+    void scan_matchers(const matcher_t &orig_matcher, const matcher_t &this_matcher) {
         std::vector<chain_common_t> common_chains;
         for (size_t i = 0; i < this_matcher.instructions.size() - MINIMUM_CHAIN_LENGTH; i++) {
             auto this_instruction = this_matcher.instructions.at(i);
@@ -148,7 +65,7 @@ namespace fnm {
                                 .start_orig = j,
                                 .start_this = i
                         };
-                        size_t k = 1;
+                        uint32_t k = 1;
                         for (; i + k < this_matcher.instructions.size() &&
                                j + k < orig_matcher.instructions.size(); k++) {
                             auto this_next_instruction = this_matcher.instructions.at(i + k);
@@ -159,7 +76,7 @@ namespace fnm {
                                 break;
                             }
                         }
-                        chain.len = static_cast<int32_t>(k);
+                        chain.len = k;
                         if (chain.len >= MINIMUM_CHAIN_LENGTH) {
                             common_chains.push_back(chain);
                         }
@@ -188,15 +105,15 @@ namespace fnm {
                 for (size_t j = 1; i + j < common_chains.size(); j++) {
                     auto last_chain = common_chains.at(i + j - 1);
                     auto next_chain = common_chains.at(i + j);
-                    if (exceeds_gap_range(last_chain, next_chain)) {
+                    if (after_gap_range(last_chain, next_chain)) {
                         break;
-                    } else if (in_gap_range(last_chain, next_chain)) {
+                    } else if (!before_gap_range(last_chain, next_chain)) {
                         match.bytes += next_chain.bytes;
                         match.len += next_chain.len;
                         match.common_chains.push_back(next_chain);
-                        auto gap = static_cast<int32_t>(next_chain.start_this - last_chain.start_this + last_chain.len);
+                        auto gap = static_cast<uint32_t>(next_chain.start_this - last_chain.start_this + last_chain.len);
                         if (gap > 0) {
-                            auto bytes = static_cast<int32_t>(next_chain.addr - last_chain.addr + last_chain.bytes);
+                            auto bytes = static_cast<uint32_t>(next_chain.addr - last_chain.addr + last_chain.bytes);
                             chain_excess_t excess_chain = {
                                     .addr = last_chain.addr + last_chain.bytes,
                                     .bytes = bytes,
@@ -214,6 +131,72 @@ namespace fnm {
                 match.print();
             }
         }
+    }
+
+    RzCmdStatus fnm_handler(RzCore *core, int argc, const char **argv) {
+        if (argc == 1) {
+            for (const auto &[name, matcher]: matchers) {
+                matcher.print(name);
+            }
+        } else {
+            auto matcher_iter = matchers.find(argv[1]);
+            if (matcher_iter == matchers.end()) {
+                eprintf("Error: Couldn't find matcher with name %s\n", argv[1]);
+                return RZ_CMD_STATUS_ERROR;
+            } else {
+                matcher_iter->second.print(argv[1]);
+            }
+        }
+        return RZ_CMD_STATUS_OK;
+    }
+
+    RzCmdStatus fnm_scan_all_handler(RzCore *core, int argc, const char **argv) {
+        auto orig_matcher_iter = matchers.find(argv[1]);
+        if (orig_matcher_iter == matchers.end()) {
+            eprintf("Error: Couldn't find matcher with name %s\n", argv[1]);
+            return RZ_CMD_STATUS_ERROR;
+        }
+        auto orig_matcher = orig_matcher_iter->second;
+        auto boundaries = rz_core_get_boundaries_prot(core, -1, "section.text", "search");
+        if (boundaries == nullptr) {
+            eprintf("Error: Couldn't get boundaries");
+            return RZ_CMD_STATUS_ERROR;
+        }
+        buffer_t buffer(core->blocksize + 32);
+        matcher_t this_matcher = {.bytes = 0};
+        void *map;
+        for (RzListIter *iter = boundaries->head; iter && (map = iter->data, 1); iter = iter->n) {
+            auto io_map = static_cast<RzIOMap *>(map);
+            auto start = rz_itv_begin(io_map->itv);
+            auto end = rz_itv_end(io_map->itv);
+            rz_cons_printf("Searching 0x%08" PFMT64x "-0x%08" PFMT64x "...\n", start, end);
+            for (uint64_t at = start; at < end; at += core->blocksize) {
+                auto min_len = std::min(core->blocksize + 32, static_cast<uint32_t>(end - at));
+                if (!rz_io_is_valid_offset(core->io, at, 0)) {
+                    break;
+                }
+                rz_io_read_at(core->io, at, buffer.data(), static_cast<int32_t>(min_len));
+                extend_matcher(core, this_matcher, buffer, at, core->blocksize);
+            }
+        }
+        rz_list_free(boundaries);
+        scan_matchers(orig_matcher, this_matcher);
+        return RZ_CMD_STATUS_OK;
+    }
+
+    RzCmdStatus fnm_scan_this_handler(RzCore *core, int argc, const char **argv) {
+        auto orig_matcher_iter = matchers.find(argv[1]);
+        if (orig_matcher_iter == matchers.end()) {
+            eprintf("Error: Couldn't find matcher with name %s\n", argv[1]);
+            return RZ_CMD_STATUS_ERROR;
+        }
+        auto orig_matcher = orig_matcher_iter->second;
+        auto len = orig_matcher.bytes;
+        buffer_t buffer(len + 32); // Pad buffer in case instruction overflows
+        rz_io_read_at_mapped(core->io, core->offset, buffer.data(), static_cast<int32_t>(len) + 32);
+        matcher_t this_matcher = {.bytes = 0};
+        extend_matcher(core, this_matcher, buffer, core->offset, len);
+        scan_matchers(orig_matcher, this_matcher);
         return RZ_CMD_STATUS_OK;
     }
 
@@ -225,10 +208,11 @@ namespace fnm {
             eprintf("Error: Couldn't find function with name %s\n", argv[2]);
             return RZ_CMD_STATUS_ERROR;
         }
-        auto len = static_cast<int32_t>(func->meta._max - func->addr);
+        auto len = static_cast<uint32_t>(func->meta._max - func->addr);
         buffer_t buffer(len);
-        rz_io_read_at_mapped(core->io, func->addr, buffer.data(), len);
-        auto matcher = create_matcher(core, buffer, func->addr, 0, len);
+        rz_io_read_at_mapped(core->io, func->addr, buffer.data(), static_cast<int32_t>(len));
+        matcher_t matcher = {.bytes = 0};
+        extend_matcher(core, matcher, buffer, func->addr, len);
         matchers.insert({argv[1], matcher});
         matcher.print(argv[1]);
         return RZ_CMD_STATUS_OK;

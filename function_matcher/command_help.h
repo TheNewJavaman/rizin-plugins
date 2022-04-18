@@ -6,7 +6,7 @@ typedef long off_t; // TODO: Find proper header
 namespace fnm {
     const RzCmdDescHelp fnm_group_help = {
             .summary = "Finds instructions similar to specified matchers",
-            .options = "[/+-?]"
+            .options = "[/.+-?]"
     };
 
     const RzCmdDescArg fnm_args[] = {

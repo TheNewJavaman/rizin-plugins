@@ -41,7 +41,7 @@ namespace fnm {
     }
 
     void matcher_t::print(const std::string &name) const {
-        rz_cons_printf("%s:\n  bytes: %d\n  instructions: %llu\n", name.c_str(), bytes, instructions.size());
+        rz_cons_printf("%s:\n  bytes: %u\n  instructions: %llu\n", name.c_str(), bytes, instructions.size());
     }
 
     bool chain_common_t::operator==(const chain_common_t &other) const {
@@ -95,7 +95,7 @@ namespace fnm {
     }
 
     void match_t::print() const {
-        rz_cons_printf("0x%08" PFMT64x ":\n  bytes: %d\n  instructions: %d\n  byte_coverage: %.5f\n  "
+        rz_cons_printf("0x%08" PFMT64x ":\n  bytes: %u\n  instructions: %u\n  byte_coverage: %.5f\n  "
                        "instruction_coverage: %.5f\n  common_chains:\n", addr, bytes, len, byte_coverage,
                        instruction_coverage);
         for (size_t i = 0; i < common_chains.size(); i++) {
